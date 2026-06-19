@@ -20,7 +20,7 @@ Perfect for:
 **Option 1 — Plugin marketplace (recommended):**
 
 ```
-/plugin marketplace add CAgcoder/anything-to-okf
+/plugin marketplace add CAgGen/anything-to-okf
 ```
 
 **Option 2 — npx (Node.js 14+ required):**
