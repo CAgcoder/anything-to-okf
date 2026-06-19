@@ -58,11 +58,11 @@ Your bundle is **plain markdown** — portable and ready for:
 | **Input formats** | BigQuery only | Any format (CSV, PDF, JSON, code…) |
 | **LLM** | Google Vertex Gemini | Claude (or codex) |
 | **Output** | Dataplex mdcode (vendor lock) | OKF markdown (portable) |
-| **Refinement** | Interactive REPL | Conversation-driven (Phase 2) |
-| **Quality metrics** | Golden-based | Deterministic + extensible (Phase 3) |
-| **User feedback** | Proposals → override | JSON feedback fusion (Phase 4) |
+| **Refinement** | Interactive REPL | Conversation-driven |
+| **Quality metrics** | Golden-based | Deterministic + extensible |
+| **User feedback** | Proposals → override | JSON feedback fusion |
 | **Architecture** | Full ADK + Dataplex | Pure Python/Bash, runs anywhere |
-| **Source re-extraction** | Not needed (Phases 2-4) | Not needed (Phases 2-4) ✅ |
+| **Source re-extraction** | Not needed  | Not needed ✅ |
 
 **TL;DR:** Same power as knowledge-catalog's enrichment engine, but format-agnostic, lighter-weight, and conversation-driven inside Claude Code.
 
