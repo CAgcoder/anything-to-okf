@@ -1,0 +1,30 @@
+{
+  "name": "anything-to-okf",
+  "id": "anything-to-okf",
+  "owner": {
+    "name": "CAgcoder"
+  },
+  "metadata": {
+    "description": "Convert files of any format into Open Knowledge Format (OKF) bundles",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "anything-to-okf",
+      "source": "./",
+      "description": "Convert files of ANY format — PDF, Word, PowerPoint, Excel, HTML, Markdown, JSON/YAML, source code, plain text, images — into an Open Knowledge Format (OKF) bundle: a directory of markdown files with YAML frontmatter, cross-links, and index.md files.",
+      "version": "1.0.0",
+      "author": {
+        "name": "CAgcoder"
+      },
+      "keywords": [
+        "okf",
+        "knowledge",
+        "conversion",
+        "markdown",
+        "documents"
+      ],
+      "category": "workflow"
+    }
+  ]
+}

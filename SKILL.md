@@ -4,368 +4,238 @@ description: >-
   Convert files of ANY format — PDF, Word/.docx, PowerPoint/.pptx,
   Excel/.xlsx/.csv, HTML, Markdown, JSON/YAML, source code, plain text, images —
   into an Open Knowledge Format (OKF) bundle: a directory of markdown files with
-  YAML frontmatter, cross-links, and index.md files, conformant to OKF v0.1. The
-  actual concept-writing is delegated to the `claude` and `codex` CLIs. Use this
-  skill whenever the user wants to turn documents, datasets, a folder of mixed
-  files, a knowledge base, a spec, or an export into OKF, an "OKF bundle", a
-  "knowledge bundle", or "Open Knowledge Format" — even if they just say
-  "convert these to OKF" or "build a knowledge bundle from this folder". Also
-  triggers on sub-commands: `/anything-to-okf generate`, `refine`, `score`,
-  `enhance`, `export`. Do NOT use the Python enrichment agent from the
-  knowledge-catalog repo; this skill is the standalone, CLI-driven path.
+  YAML frontmatter, cross-links, and index.md files, conformant to OKF v0.1. Use
+  this skill whenever the user wants to turn documents, datasets, a folder of
+  mixed files, a knowledge base, a spec, or an export into OKF, an "OKF bundle",
+  a "knowledge bundle", or "Open Knowledge Format" — even if they just say
+  "convert these to OKF" or "build a knowledge bundle from this folder".
 ---
 
 # Anything → OKF
 
 Turn arbitrary source files into a conformant **Open Knowledge Format (OKF)**
-bundle. OKF is just a directory of markdown files with YAML frontmatter, joined
-by markdown cross-links and `index.md` listings — readable by humans, parseable
-by agents, diffable in git. The full rules are in
-[references/okf-spec.md](references/okf-spec.md); read that before planning.
+bundle: a directory of markdown files with YAML frontmatter, joined by markdown
+cross-links and `index.md` listings — readable by humans, parseable by agents,
+diffable in git. Full rules: [references/okf-spec.md](references/okf-spec.md);
+read it before planning.
 
-The defining idea of this skill: **you plan, the CLIs write.** You (the
-orchestrating agent) do the reasoning that needs judgment — extracting content,
-deciding what the concepts are, naming and grouping them, choosing each `type`.
-The grounded prose-writing of each concept is delegated to the `claude` and/or
-`codex` CLIs via [scripts/convert_source.sh](scripts/convert_source.sh). The
-deterministic mechanics — index generation and conformance checking — are
-scripts, not LLM calls.
+## How this skill works
 
-## Commands
+**You (the agent) do the whole conversion directly.** You extract the content,
+decide what the concepts are, name and group them, and write each concept's
+markdown yourself — grounded in the extracted source. There is no CLI dispatch
+and no LLM "merge pass": you are the LLM, so the reasoning that needs judgment
+is yours to do inline.
 
-| Command | What it does |
-|---------|-------------|
-| `/anything-to-okf generate` | Convert source files into an OKF bundle with cross-table concepts |
-| `/anything-to-okf refine` | Polish concepts without re-extracting sources |
-| `/anything-to-okf score` | Evaluate bundle quality (structural, coverage, cross-refs) |
-| `/anything-to-okf enhance` | Apply user feedback proposals to concepts |
-| `/anything-to-okf export` | Prepare bundle for Obsidian / git / Hugo / Dataplex |
+Only two things are scripts, because they must be deterministic, not judgment:
 
-Plain English works too — the skill reads intent from context automatically.
+- [scripts/generate_indexes.py](scripts/generate_indexes.py) — builds every
+  `index.md` from concept frontmatter.
+- [scripts/validate_bundle.py](scripts/validate_bundle.py) — checks OKF
+  conformance (hard errors vs. soft warnings).
 
-## When to use this
+Both need PyYAML (`pip install pyyaml` if missing).
 
-Any request to produce OKF / a "knowledge bundle" / "Open Knowledge Format" from
-files or a folder: a pile of PDFs, a Word/Excel/PowerPoint export, a docs site,
-a schema dump, a codebase, a Notion/Obsidian export, a single spec, etc. If the
-input is a BigQuery dataset and the user specifically wants the reference Python
-enrichment agent, that's a different tool — this skill is the standalone path.
+## Your role, and the voice of every concept
 
-## Workflow: Full Pipeline (with Cross-Table Concepts)
+**Role (task context).** You are a knowledge engineer turning source material
+into a trustworthy OKF bundle that humans and agents can rely on *without
+re-reading the sources*. Your job is judgment — what the concepts are, how they
+connect, what each one truthfully says. Parsing files is other skills' job; the
+deterministic bookkeeping is the two scripts' job.
 
-The skill now automatically detects and injects *cross-table relationships* — facts
-that connect multiple concepts (e.g., a foreign key defined in one concept's docs,
-but also injected into the related concept's overview). No manual link-building needed.
+**Voice (tone) of a concept.** Each concept reads like a reference entry, not
+marketing prose: factual, dense, neutral. Short declarative sentences,
+definitions over adjectives, no hedging or filler ("this powerful table
+enables…" is wrong). If a fact isn't in the source, stay silent — never smooth a
+gap with a plausible sentence.
+
+This skill supplies the durable half of the prompt — role, tone, background
+([references/okf-spec.md](references/okf-spec.md) + the extracted source), the
+rules below, and the worked example. The **runtime** supplies the other half: the
+conversation so far and the user's actual request ("convert these to OKF"). Don't
+hardcode those into anything.
+
+## Workflow
 
 ### 1. Discover and classify inputs
 
-List the input file(s) or directory. Classify each by extension/MIME. If given a
-URL or an archive, fetch/extract first. Create a scratch workspace:
-`mkdir -p <bundle>/.okf-work` (extracted text lands here; it is not part of the
-bundle).
+List the input file(s)/directory. Classify each by extension. If given a URL or
+an archive, fetch/extract first. Make a scratch dir for extracted text:
+`mkdir -p <bundle>/.okf-work` — it holds working text and is **not** part of the
+bundle (the scripts ignore non-`.md` files, but keep it out of the final tree).
 
-### 2. Extract clean content per source
+### 2. Extract clean content per source — faithfully
 
-Turn every source into faithful text/markdown — see
-[references/format-extraction.md](references/format-extraction.md) for the method
-per format (office formats use the bundled `pdf`/`docx`/`pptx`/`xlsx` skills;
-text/code/json are read directly; html via pandoc/WebFetch; images described
-visually). Write each source's extracted text to
-`<bundle>/.okf-work/<slug>.src.txt`.
+Turn every source into faithful text/markdown. Method per format is in
+[references/format-extraction.md](references/format-extraction.md) (office
+formats use the bundled `pdf`/`docx`/`pptx`/`xlsx` skills; text/code/json read
+directly; html via pandoc/WebFetch; images described visually). Write each
+source's text to `<bundle>/.okf-work/<slug>.src.txt` if it helps you re-reason
+later; small sources you can hold in context directly.
 
-The cardinal rule of extraction is **fidelity**: preserve exact column names,
-types, enum values, formulas, IDs, and numbers; keep tables as tables and code
-as code; never invent to fill a gap. Everything downstream inherits this
-grounding (or this hallucination), so get it right here.
+The cardinal rule is **fidelity**: preserve exact column names, types, enum
+values, formulas, IDs, and numbers; keep tables as tables and code as code;
+never invent to fill a gap. Everything downstream inherits this grounding (or
+this hallucination), so get it right here.
 
-### 3. Plan the bundle (the enumeration step)
+### 3. Plan the concept set and the tree
 
-Before writing anything, decide the concept set and the tree. This is the step
-that makes the bundle coherent rather than a flat dump:
+Before writing anything, decide the concepts and the directory layout. This is
+the step that makes the bundle coherent rather than a flat dump.
 
-- **One concept = one unit of knowledge.** A table, a dataset, an API endpoint,
-  a metric, a business process/playbook, a glossary term, a source document, a
-  code module. A single rich source often yields several concepts; several
-  near-identical sources often collapse into one.
+- **One concept = one unit of knowledge** — a table, dataset, API endpoint,
+  metric, playbook, glossary term, source document, or code module. One rich
+  source often yields several concepts; several near-identical sources collapse
+  into one.
 - **Canonicalize and dedupe.** If two sources describe the same thing under
-  different names/acronyms, make ONE concept and mention the alternate names in
-  the body — don't emit duplicates. Pick the most fully-spelled, kebab-case
-  concept id.
+  different names, make ONE concept and mention the aliases in the body. The id
+  is just the file path minus `.md` (spec §2) — pick a stable, descriptive one;
+  lowercase kebab-case is a sensible default, not a spec requirement.
 - **Choose a directory structure** that mirrors how the knowledge groups
-  (e.g. `tables/`, `datasets/`, `references/`, `playbooks/`). The layout is free;
-  pick what aids navigation.
-- **Assign each concept a `type`** — a short, self-explanatory, reused-across-
-  like-concepts value (`BigQuery Table`, `API Endpoint`, `Metric`, `Playbook`,
-  `Glossary Term`, `Document`, `Source File`, …). The index groups by `type`, so
-  consistency matters.
-- **Decide each concept's primary source(s)** so the writer is grounded in the
-  right slice of extracted text.
+  (`tables/`, `datasets/`, `references/`, `playbooks/`, …). Layout is free; pick
+  what aids navigation.
+- **Assign each concept a `type`** — short, self-explanatory, reused across like
+  concepts (`BigQuery Table`, `API Endpoint`, `Metric`, `Playbook`,
+  `Glossary Term`, `Document`, …). The index groups by `type`, so be consistent.
+- **Note the relationships** between concepts (FK, "uses", "derived from", …).
+  You'll turn these into plain markdown links while writing — you already know
+  them because you planned the set; no separate pass infers them.
 
-Write this plan down (a short list of `concept-id → type → source file(s)`)
-before generating.
+Write the plan down (a short `concept-id → type → source` list) before writing.
 
-### 4. Convert each concept via claude / codex (with concept extraction)
+### 4. Write each concept .md directly
 
-For each planned concept, call the dispatch script with its extracted source and
-chosen metadata. The script builds an OKF-aware, grounding-disciplined prompt that
-ALSO asks the model to extract any **cross-table facts** from the source (foreign
-keys, metrics, relationships), writing both the concept `.md` AND a `.concepts.json` sidecar:
+Think through what this one source truthfully supports first (internally — don't
+narrate the analysis), then write the file. Each
+`<bundle>/<dir>/<concept-id>.md` follows this output contract:
 
-```bash
-scripts/convert_source.sh \
-  --source <bundle>/.okf-work/<slug>.src.txt \
-  --out    <bundle>/<dir>/<concept-id>.md \
-  --type   "BigQuery Table" \
-  --title  "Customer Orders" \
-  --id     tables/orders \
-  --resource "https://.../tables/orders" \
-  --engine auto \
-  --instructions "Relate to /tables/customers.md via customer_id."
-```
+1. **Start with the frontmatter block.** First line is `---`. `type` is the only
+   hard requirement; add `title`, `description`, and `resource`/`tags`/`timestamp`
+   when the source provides them. YAML safety: quote any value containing a
+   colon, `#`, or quotes, or the parser will choke.
+2. **Body in structured sections.** `# Schema` tables for fields/columns,
+   `# Examples` fenced code for usage, `# Citations` (numbered) for sources.
+   Define what each field/term *is* and its role — never a bare `name: type`.
+   Quote specific values, enum meanings, qualifiers, and formulas verbatim.
+3. **Cross-link both ways.** Where this concept relates to another, link it with a
+   bundle-relative link — `[customers](/tables/customers.md)` — and add the
+   matching link in the other concept too, so the relationship is discoverable
+   from either end.
 
-**Engine selection (`--engine`):**
+Ground every statement (see the rules below). A thin source yields a short
+concept — that is correct, not a failure. Write independent concepts in any
+order; nothing depends on a later aggregation step. **Read the worked example
+below before your first concept.**
 
-- `auto` *(default)* — use `claude` if installed, else `codex`. Safe default.
-- `claude` — force the `claude` CLI.
-- `codex` — force the `codex` CLI.
-- `both` — get **two independent drafts** (`<out>.claude.md` and
-  `<out>.codex.md`). Then YOU reconcile them into the final `<out>`: take the
-  union of *grounded* facts, keep one clean structure, and drop anything neither
-  source supports. Use `both` for high-value or ambiguous concepts where a
-  second model's pass is worth the extra cost/time.
+### 5. Generate indexes (deterministic)
 
-> `codex` may not be installed on every machine. `auto` and `claude` work with
-> just the `claude` CLI; `codex`/`both` require `codex` on PATH (the script
-> errors clearly if it's missing). You can also write a concept directly by hand
-> for trivial cases — but routing through the script is the intended path and is
-> what keeps grounding consistent across a large bundle.
-
-You can fan out: run several `convert_source.sh` calls in parallel for
-independent concepts. After generation, skim each concept for grounding (no
-invented facts) and good structure; re-run with richer `--instructions` if a
-concept came out thin or off.
-
-### 5. Aggregate cross-table concepts (AUTOMATED)
-
-After all concepts are generated, run the aggregation pipeline:
-
-```bash
-./scripts/build_bundle_with_concepts.sh <bundle> [--model <id>]
-```
-
-Or manually, step by step:
-
-```bash
-# (1) Collect all .concepts.json sidecars into one list
-python3 scripts/collect_concepts.py <bundle>
-
-# (2) Run ONE smart LLM pass to merge/connect concepts
-python3 scripts/aggregate_concepts.py <bundle> --model claude-opus-4-8
-
-# (3) Inject cross-references back into each concept's .md
-python3 scripts/inject_shared_concepts.py <bundle>
-```
-
-**What happens:**
-
-- Each `.concepts.json` sidecar contains facts the model extracted (FK, metrics, relationships)
-- `collect_concepts.py` deduplicates them across all concepts
-- `aggregate_concepts.py` runs an LLM merge pass that:
-  - Folds near-duplicates (same fact, different wording)
-  - **Connects facts across documents** — e.g., if one concept says "customer_id is FK" and another says "it points to customers", this pass merges them into one complete fact
-  - Drops pure duplicates
-- `inject_shared_concepts.py` adds a `# Cross-references` section to each concept, listing all relationships that involve it (bidirectionally)
-
-**Bidirectional linkage:** A foreign-key relationship between orders and customers is automatically added to BOTH the orders and customers overviews, even if only one source document mentions it.
-
-**No manual linking needed** — the system infers relationships from the sources and distributes them intelligently.
-
-### 6. Generate indexes (deterministic)
-
-Done automatically by `build_bundle_with_concepts.sh`, but can be run standalone:
+After all concepts exist:
 
 ```bash
 python3 scripts/generate_indexes.py <bundle>
 ```
 
-This writes an `index.md` in every directory, grouping concepts by `type` and
-listing subdirectories — the progressive-disclosure layer. Run it AFTER all
-concepts exist so it reflects the final tree. Don't hand-write indexes.
+Writes an `index.md` in every directory, grouping concepts by `type` and listing
+subdirectories. Run it last so it reflects the final tree. Don't hand-write
+indexes.
 
-### 7. Validate (deterministic)
-
-Done automatically by `build_bundle_with_concepts.sh`, but can be run standalone:
+### 6. Validate (deterministic)
 
 ```bash
 python3 scripts/validate_bundle.py <bundle>
 ```
 
-Fix every hard `[ERROR]` (missing/unparseable frontmatter, missing `type`,
-stray frontmatter in `index.md`). `[warn]` items (missing recommended fields,
-broken links, missing index) are spec-tolerated — address them when it improves
-the bundle, but they don't block conformance. Use `--strict` only when the user
-wants a "complete" bundle with no soft issues.
+Fix every hard `[ERROR]` (missing/unparseable frontmatter, missing `type`, stray
+frontmatter in `index.md`). `[warn]` items (missing recommended fields, broken
+links, missing index) are spec-tolerated — fix when it improves the bundle.
+Broken-link warnings are worth scanning: a typo'd cross-link shows up here.
+Use `--strict` only when the user wants a bundle with zero soft issues.
 
-### 8. Clean up and report
+### 7. Report
 
-Bundle is ready. Report: path, concept count, cross-table relationships detected,
-validation status.
+Report: bundle path, concept count, and validation status (conformant or the
+remaining errors). Done.
 
----
+## After generation
 
-## After Generation: refine → score → enhance → export
+The bundle is plain markdown in a directory — already git-diffable and
+Obsidian/Hugo-ready; "export" is just using it. To change it, the user asks in
+plain language and you edit the relevant `.md` directly (no special mode):
 
-Once `generate` completes, the user has a working OKF bundle. The skill supports
-interactive improvement **without re-extracting sources**:
+- "Make the orders overview more concise" → edit that file's body.
+- "Add an Examples section to customers" → add the section.
+- "Add cascade-delete semantics to the FK" → edit the schema/relationship note,
+  keeping it grounded in what the user told you.
 
-### refine — Polish concepts
+Re-run `generate_indexes.py` only if you added/removed concepts or changed a
+`title`/`type`/`description`. Re-run `validate_bundle.py` to confirm it's still
+conformant. "Score it" = run the validator; it reports the only quality signals
+that are actually verifiable (conformance, concept count, broken links). Don't
+emit invented quality numbers.
 
-**In the chat:** User says anything like:
+## Grounding rules (these make or break the output)
 
-- "Make the orders overview more concise"
-- "Add an Examples section with sample queries"
-- "Clarify what customer_id means"
+The whole value of an OKF bundle is that it is *trustworthy* — usable without
+re-reading the sources. So:
 
-**Skill does:**
-1. Loads the current concept `.md`
-2. Sends it + user request to Claude for refinement
-3. Rewrites just that section (keeps metadata, other sections intact)
-4. Records the change in `refine_session.json`
-
-**No source re-extraction.** The aggregated concepts stay the same;
-only the generated markdown is edited. Supports unlimited iteration rounds.
-
-**Commands:** Ask for any change, or type `/anything-to-okf refine <concept>`.
-
-### score — Evaluate quality
-
-**In the chat:** User says:
-
-- "Score this bundle"
-- "How good is it?"
-- "Evaluate the concepts"
-
-**Skill does:**
-1. Runs `python3 scripts/evaluate_bundle.py <bundle>`
-2. Reports:
-   - **Structural Validity** (99/100): all YAML is valid, required fields present
-   - **Concept Coverage** (12 concepts): how many you have
-   - **Cross-Reference Completeness** (100%): bidirectional links present
-   - **Overall Score** (99/100)
-
-**Future:** Golden-based metrics (hallucination check, concept recall, consistency).
-
-**Commands:** "Score it", "How good is it?", or `/anything-to-okf score`.
-
-### enhance — Apply feedback
-
-**In the chat:** User provides feedback in JSON format or describes it naturally:
-
-- "Add this detail to the schema section"
-- "The lineage is missing [info]"
-- (or upload a `feedback.json` with detailed proposals)
-
-**Skill does:**
-1. Reads feedback proposals
-2. For each affected concept:
-   - Loads current markdown
-   - Calls Claude with feedback as additional context
-   - Rewrites to incorporate feedback
-   - Saves new version
-3. Reports what changed
-
-**Feedback is ADDITIVE:** Never removes or overwrites existing content;
-only enhances based on user input.
-
-**Commands:** Describe what to add, or `/anything-to-okf enhance`.
-
----
-
-## Complete Example Journey
-
-```
-User: "/anything-to-okf generate" (or "Convert my sales.csv, customers.json, schema-doc.md to OKF")
-→ Generates bundle: 12 concepts, bidirectional FK links, validated ✅
-
-User: "/anything-to-okf refine" (or "The orders overview is too wordy")
-→ Rewrites that concept, records change — no source re-extraction
-→ Updated orders.md (shorter, clearer)
-
-User: "/anything-to-okf score" (or "Score it")
-→ Structural Validity: 99/100, Cross-References: 100%, Overall: 98/100
-
-User: "/anything-to-okf enhance" (or "Add cascade delete semantics to the FK")
-→ Feedback → updates schema section in orders.md
-
-User: "/anything-to-okf export" (or "Done, export to Obsidian")
-→ Final bundle ready for version control, Obsidian, Hugo, Dataplex, etc.
-```
-
----
-
-## Key Properties
-
-**generate:** Extracts sources → concepts → aggregates cross-table relationships
-**refine:** Free-text iteration on generated markdown (no re-extraction)
-**score:** Quality metrics (structural validity, coverage, cross-refs; future: judge-based)
-**enhance:** User-provided context → concept re-refinement, additive only
-**export:** Prepare bundle for target platform (Obsidian, git, Hugo, Dataplex)
-
-All commands are part of ONE continuous dialogue — not separate tools.
-
-## Grounding and quality rules (these make or break the output)
-
-The whole value of an OKF bundle is that it is *trustworthy* — an agent or human
-should be able to rely on it without re-reading the sources. So:
-
-- **Never invent.** Every statement in a concept must trace to its source. If
-  the source doesn't say it, it doesn't go in. Thin source → short concept;
-  that's correct, not a failure. Padding with plausible generalities is the
-  worst outcome.
+- **Never invent.** Every statement traces to its source. Padding with plausible
+  generalities is the worst outcome.
 - **Capture meaning, not just names.** Define what each column/field/term *is*
-  and its role — don't list a bare `name: type`. Quote specific values,
-  qualifiers ("null when there's no accepted answer"), enum meanings, and
-  formulas verbatim.
-- **Prefer structure.** Tables, lists, fenced code, and conventional headings
-  (`# Schema`, `# Examples`, `# Citations`) beat prose for retrieval.
+  and its role. Quote specific values, qualifiers, enum meanings, formulas.
+- **Prefer structure.** Tables, lists, fenced code, conventional headings beat
+  prose for retrieval.
 - **Keep provenance.** Record source URLs/filenames as `resource` and/or
   numbered `# Citations`. Keep real links verbatim; drop dead local-path links.
 
+## Worked example — one source → one concept
+
+**Input** (extracted from `customers.json`):
+
+~~~json
+{ "table": "customers",
+  "uri": "https://example.internal/catalog/customers",
+  "columns": [
+    {"name": "customer_id", "type": "STRING", "desc": "Primary key."},
+    {"name": "email",       "type": "STRING", "desc": "Null for guest checkouts."},
+    {"name": "tier",        "type": "STRING", "desc": "One of free/plus/pro."} ] }
+~~~
+
+**Output** — `tables/customers.md`:
+
+~~~markdown
+---
+type: Table
+title: Customers
+description: One row per customer account.
+resource: https://example.internal/catalog/customers
+---
+
+# Schema
+
+| Column        | Type   | Description |
+|---------------|--------|-------------|
+| `customer_id` | STRING | Primary key. Referenced by [orders](/tables/orders.md). |
+| `email`       | STRING | Customer email; **null for guest checkouts**. |
+| `tier`        | STRING | Account tier — one of `free`, `plus`, `pro`. |
+
+# Citations
+
+[1] [customers schema](https://example.internal/catalog/customers)
+~~~
+
+What the output deliberately **omits**: owner, SLA, row count, lineage — the
+source states none, so the concept states none. The `email` qualifier and the
+exact `tier` enum are kept verbatim. The FK link is written here and mirrored in
+`orders.md`. That is the standard to match.
+
 ## Files in this skill
 
-**Reference docs:**
-- [references/okf-spec.md](references/okf-spec.md) — condensed OKF v0.1 rules.
-  Read before planning.
+- [references/okf-spec.md](references/okf-spec.md) — the OKF v0.1 specification
+  (canonical). Read before planning.
 - [references/format-extraction.md](references/format-extraction.md) — how to
   extract clean content from each input format. Read in step 2.
-
-**Core conversion:**
-- [scripts/convert_source.sh](scripts/convert_source.sh) — convert one source
-  to one concept via `claude`/`codex`. Also extracts `<CONCEPTS>` JSON block
-  to a `.concepts.json` sidecar (step 4).
-
-**Cross-table concepts (Phase 1):**
-- [scripts/collect_concepts.py](scripts/collect_concepts.py) — gather all
-  `.concepts.json` sidecars and deduplicate (step 5.1).
-- [scripts/aggregate_concepts.py](scripts/aggregate_concepts.py) — run ONE
-  smart LLM merge pass to connect and fold cross-table facts (step 5.2).
-- [scripts/inject_shared_concepts.py](scripts/inject_shared_concepts.py) —
-  add `# Cross-references` sections to each concept, linking related concepts
-  bidirectionally (step 5.3).
-- [scripts/build_bundle_with_concepts.sh](scripts/build_bundle_with_concepts.sh) —
-  orchestrate the full pipeline (steps 5-7 in one go).
-
-**refine / score / enhance:**
-- [scripts/refine_session.py](scripts/refine_session.py) — session state for
-  `refine`: tracks change history, supports rollback via `refine_session.json`.
-- [scripts/evaluate_bundle.py](scripts/evaluate_bundle.py) — `score`: structural
-  validity, concept coverage, cross-reference completeness; extensible for
-  judge-based checks.
-- [scripts/apply_feedback.py](scripts/apply_feedback.py) — `enhance`: loads user
-  feedback proposals (JSON) and re-refines affected concepts via Claude.
-
-**Index and validation:**
 - [scripts/generate_indexes.py](scripts/generate_indexes.py) — generate all
-  `index.md` files (step 6).
+  `index.md` files (step 5).
 - [scripts/validate_bundle.py](scripts/validate_bundle.py) — check OKF
-  conformance (step 7).
+  conformance (step 6).

@@ -27,9 +27,7 @@ for (const file of SKILL_FILES) {
 }
 
 console.log(`\n✅ anything-to-okf installed → ${dest}\n`);
-console.log('Restart Claude Code, then type in chat:');
-console.log('  /anything-to-okf generate  – convert files to OKF bundle');
-console.log('  /anything-to-okf refine    – polish generated concepts');
-console.log('  /anything-to-okf score     – evaluate bundle quality');
-console.log('  /anything-to-okf enhance   – apply feedback to concepts');
-console.log('  /anything-to-okf export    – prepare for Obsidian / git / Hugo\n');
+console.log('Restart Claude Code, then just ask in chat, e.g.:');
+console.log('  "Convert this folder to OKF"');
+console.log('  "Build an OKF bundle from orders.csv and customers.json"');
+console.log('Edit the result by asking; "score it" re-runs the validator.\n');

@@ -45,19 +45,16 @@
     },
     {
       "id": 3,
-      "name": "cross-table-concepts",
-      "prompt": "Create an OKF bundle from orders.csv, customers.json, and this markdown file about their relationship. The bundle should automatically detect and inject the foreign key relationship between the two tables.",
-      "expected_output": "A bundle with orders and customers concepts that both reference each other via a '# Cross-references' section. The FK relationship is extracted from the markdown, deduplicated, and bidirectionally injected—both orders mentions the link to customers AND customers mentions the inbound orders reference, even though the relationship is only explicitly stated once.",
+      "name": "bidirectional-cross-links",
+      "prompt": "Create an OKF bundle from orders.csv, customers.json, and this markdown file about their relationship. Make sure the foreign-key relationship between the two tables is discoverable from both concepts.",
+      "expected_output": "A bundle with orders and customers concepts that link to each other with plain bundle-relative markdown links. The FK relationship stated once in the relationship markdown is reflected on both sides: orders links to customers and customers links to orders. Links are written directly into each concept body where the relationship is described — no separate '# Cross-references' section or sidecar files are required.",
       "files": ["fixtures/orders.csv", "fixtures/customers.json", "fixtures/order_customer_relationship.md"],
       "assertions": [
-        {"text": "Both orders.md and customers.md are generated with valid frontmatter and non-empty 'type'."},
-        {"text": "A .concepts.json sidecar is created for the relationship markdown, containing a JSON entry with kind='join', tables=['orders','customers'], and the FK description."},
-        {"text": "The aggregated_concepts.json file lists the orders-customers FK relationship with both table names."},
-        {"text": "orders.md includes a '# Cross-references' section mentioning the link to customers (even though the orders CSV itself doesn't mention the relationship)."},
-        {"text": "customers.md includes a '# Cross-references' section mentioning the link to orders (bidirectional injection)."},
-        {"text": "Both cross-references sections contain markdown links ([orders](/tables/orders.md) or similar)."},
-        {"text": "The relationship description is faithful to the source (customer_id is FK, establishes 1:N, no invented details)."},
-        {"text": "The final bundle passes validate_bundle.py with 0 errors."}
+        {"text": "Both orders and customers concept .md files are generated with valid frontmatter and a non-empty 'type'."},
+        {"text": "The orders concept contains a bundle-relative markdown link to the customers concept (e.g. [customers](/tables/customers.md)) at the point its body describes customer_id."},
+        {"text": "The customers concept contains a bundle-relative markdown link back to the orders concept, so the relationship is discoverable from the customers side too."},
+        {"text": "The relationship is faithful to the source: customer_id is the FK, it establishes a 1:N orders-to-customer relationship, with no invented cardinality or details."},
+        {"text": "The bundle passes scripts/validate_bundle.py with 0 errors and no broken-link warnings for those cross-links."}
       ]
     }
   ]

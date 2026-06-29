@@ -1,0 +1,11 @@
+{
+  "name": "anything-to-okf",
+  "description": "Convert files of ANY format — PDF, Word/.docx, PowerPoint/.pptx, Excel/.xlsx/.csv, HTML, Markdown, JSON/YAML, source code, plain text, images — into an Open Knowledge Format (OKF) bundle: a directory of markdown files with YAML frontmatter, cross-links, and index.md files, conformant to OKF v0.1.",
+  "version": "1.0.0",
+  "author": {
+    "name": "CAgcoder"
+  },
+  "license": "MIT",
+  "keywords": ["okf", "knowledge", "conversion", "markdown", "documents", "pdf", "docx", "pptx"],
+  "skills": ["./"]
+}

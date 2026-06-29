@@ -1,9 +1,9 @@
 # Extracting clean content from any input format
 
-The conversion engine (`scripts/convert_source.sh` → claude/codex) only reasons
-well over **plain text or markdown**. So the first job is always: turn each
-source file into faithful text/markdown, preserving structure (headings, tables,
-lists, code) and capturing real values — without inventing anything.
+You reason best over **plain text or markdown**. So the first job is always: turn
+each source file into faithful text/markdown, preserving structure (headings,
+tables, lists, code) and capturing real values — without inventing anything.
+Then you write the concept directly from that text (SKILL.md step 4).
 
 Pick the lightest reliable method per format. The goal is fidelity, not
 prettiness: a table in the source should survive as a markdown table; a column
@@ -71,7 +71,8 @@ sheet (or logical table) is usually its own concept.
 
 ## Where extraction output goes
 
-Write each source's extracted text to a scratch file (e.g.
-`.okf-work/<concept-id>.src.txt`), then pass it to `convert_source.sh --source`.
-This keeps the grounding input explicit and reproducible, and lets you re-run a
-single concept's conversion without re-extracting.
+For anything non-trivial, write each source's extracted text to a scratch file
+(e.g. `<bundle>/.okf-work/<slug>.src.txt`) before writing concepts. This keeps
+the grounding input explicit and lets you re-reason over a single source later
+without re-extracting it. Small sources you can hold in context and write from
+directly. The `.okf-work/` dir is scratch — keep it out of the final bundle.
